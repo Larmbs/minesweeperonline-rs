@@ -46,9 +46,9 @@ pub fn send(socket: &mut TcpStream, msg: MsgSend) -> MsgReceive {
     let bytes: Vec<u8> = msg.try_into().unwrap();
     socket.write_all(&bytes).unwrap();
 
-    let mut buf = Vec::new();
-    socket.read(&mut buf).unwrap();
-    MsgReceive::try_from(buf).unwrap()
+    let mut buffer = vec![0u8; 1024];
+    socket.read(&mut buffer).unwrap();
+    MsgReceive::try_from(buffer).unwrap()
 }
 
 /// Tries to send a message, returns an error if it fails.
@@ -56,7 +56,7 @@ pub fn try_send(socket: &mut TcpStream, msg: MsgSend) -> anyhow::Result<MsgRecei
     let bytes: Vec<u8> = msg.try_into()?;
     socket.write_all(&bytes)?;
 
-    let mut buf = Vec::new();
-    socket.read(&mut buf)?;
-    MsgReceive::try_from(buf)
+    let mut buffer = vec![0u8; 1024];
+    socket.read(&mut buffer)?;
+    MsgReceive::try_from(buffer)
 }
