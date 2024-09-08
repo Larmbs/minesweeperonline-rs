@@ -1,4 +1,3 @@
-#![allow(unused)]
 use anyhow::Context;
 use bincode;
 use serde::{Deserialize, Serialize};
@@ -41,16 +40,6 @@ impl TryFrom<Vec<u8>> for MsgReceive {
     fn try_from(value: Vec<u8>) -> anyhow::Result<Self, <MsgReceive as TryFrom<Vec<u8>>>::Error> {
         bincode::deserialize(&value).context("Failed to deserialize the message")
     }
-}
-
-/// Sends a message, panics if it fails.
-pub fn send(socket: &mut TcpStream, msg: MsgSend) -> MsgReceive {
-    let bytes: Vec<u8> = msg.try_into().unwrap();
-    socket.write_all(&bytes).unwrap();
-
-    let mut buffer = vec![0u8; 1024];
-    socket.read(&mut buffer).unwrap();
-    MsgReceive::try_from(buffer).unwrap()
 }
 
 /// Tries to send a message, returns an error if it fails.

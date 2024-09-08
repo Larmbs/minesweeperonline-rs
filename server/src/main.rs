@@ -39,10 +39,7 @@ pub async fn handle(mut socket: TcpStream) {
                     if index < board.cells.len() {
                         let revealed_cells = board.reveal(index);
                         if revealed_cells.len() == 0 {
-                            MsgSend::GameLoss(
-                                "10 secs!".to_string(),
-                                board.get_bomb_positions(),
-                            )
+                            MsgSend::GameLoss("10 secs!".to_string(), board.get_bomb_positions())
                         } else {
                             if board.revealed_all() {
                                 MsgSend::GameWin("10 secs!".to_string(), revealed_cells)
@@ -69,6 +66,7 @@ pub async fn handle(mut socket: TcpStream) {
 
 #[tokio::main]
 async fn main() {
+    println!("Starting Server");
     let listener = TcpListener::bind("127.0.0.1:8000")
         .await
         .expect("Error starting the server");

@@ -1,6 +1,3 @@
-use std::cell;
-
-use rand;
 use rand::seq::SliceRandom;
 
 #[derive(Clone, Debug)]
@@ -60,7 +57,6 @@ impl BoardInstance {
                 cells[i].proximity = bombs_nearby;
             }
         }
-        println!("{:?}", cells);
         Self {
             dim: *dim,
             cells,
@@ -80,6 +76,7 @@ impl BoardInstance {
                 return vec![];
             }
             self.cells[index].hidden = false;
+            self.revealed_count += 1;
             let (x, y) = self.coord_from_index(index);
             let indices = [
                 self.ix(x.saturating_sub(1), y),
@@ -92,7 +89,6 @@ impl BoardInstance {
             res.extend(self.reveal(indices[2]));
             res.extend(self.reveal(indices[3]));
             res.push((index, self.cells[index].proximity));
-            println!("{:?}", res);
             res
         } else {
             vec![]
