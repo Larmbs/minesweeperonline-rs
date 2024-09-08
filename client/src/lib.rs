@@ -5,13 +5,14 @@ use protocol::{try_send, MsgReceive, MsgSend};
 use std::net::{TcpStream, ToSocketAddrs};
 
 /// Represents an individual MineSweeper cell's state
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 enum Cell {
-    REVEALED(u8),
-    HIDDEN(bool),
+    Revealed(u8),
+    Hidden(bool),
 }
 
 /// A MineSweeper client to interact with server online
+#[derive(Debug)]
 pub struct MineSweeperClient {
     socket: TcpStream,
     dim: (usize, usize),
@@ -32,7 +33,7 @@ impl MineSweeperClient {
             Ok(Self {
                 socket,
                 dim,
-                cells: vec![Cell::HIDDEN(false); dim.0 * dim.1],
+                cells: vec![Cell::Hidden(false); dim.0 * dim.1],
             })
         } else {
             todo!()
@@ -42,7 +43,7 @@ impl MineSweeperClient {
     /// Reveals a cell
     pub fn reveal_cell(&mut self, index: usize) {
         assert!(index < self.cells.len(), "Index provided is out of range");
-        if self.cells[index] == Cell::HIDDEN(false) {
+        if self.cells[index] == Cell::Hidden(false) {
             let reply = try_send(&mut self.socket, MsgSend::Reveal(index)).unwrap();
             match reply {
                 MsgReceive::Error(msg) => panic!("{}", msg),
@@ -50,7 +51,7 @@ impl MineSweeperClient {
                 MsgReceive::RevealCells(cells) => {
                     for (index, value) in cells {
                         assert!(index < self.cells.len(), "Server supplied fatal indices");
-                        self.cells[index] = Cell::REVEALED(value);
+                        self.cells[index] = Cell::Revealed(value);
                     }
                 }
                 MsgReceive::GameEnd(_, _, _) => todo!(),
@@ -61,7 +62,7 @@ impl MineSweeperClient {
     /// Flags a cell for convenience
     pub fn flag_cell(&mut self, index: usize) {
         assert!(index < self.cells.len(), "Index provided is out of range");
-        if let Cell::HIDDEN(ref mut val) = self.cells[index] {
+        if let Cell::Hidden(ref mut val) = self.cells[index] {
             *val = !*val;
         }
     }

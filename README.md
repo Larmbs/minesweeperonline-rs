@@ -16,4 +16,6 @@ opcode
 - [0] Error (message)
 - [1] Connection Accepted
 - [2] Reveal Cells ([index, value])
-- [3] GameEnd (win/loss, time, [index])
+- [3] GameWin (time, [index, value])
+- [4] GameLoss (time, [index])
+

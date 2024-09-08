@@ -14,10 +14,10 @@ pub enum MsgReceive {
     // (index)
     Reveal(usize),
 }
-impl TryFrom<Vec<u8>> for MsgReceive {
+impl TryFrom<&Vec<u8>> for MsgReceive {
     type Error = anyhow::Error;
 
-    fn try_from(value: Vec<u8>) -> anyhow::Result<Self, <MsgReceive as TryFrom<Vec<u8>>>::Error> {
+    fn try_from(value: &Vec<u8>) -> anyhow::Result<Self, <MsgReceive as TryFrom<&Vec<u8>>>::Error> {
         bincode::deserialize(&value).context("Failed to deserialize the message")
     }
 }
@@ -30,8 +30,10 @@ pub enum MsgSend {
     ConnectionAccepted,
     // ([index, value])
     RevealCells(Vec<(usize, u8)>),
-    // (win/loss, time, [index])
-    GameEnd(bool, String, Vec<usize>),
+    // (time, [index, value])
+    GameWin(String, Vec<(usize, u8)>),
+    // (time, [index])
+    GameLoss(String, Vec<usize>),
 }
 impl TryInto<Vec<u8>> for MsgSend {
     type Error = anyhow::Error;
@@ -48,7 +50,7 @@ pub fn send(socket: &mut TcpStream, msg: MsgSend) -> MsgReceive {
 
     let mut buf = Vec::new();
     socket.read(&mut buf).unwrap();
-    MsgReceive::try_from(buf).unwrap()
+    MsgReceive::try_from(&buf).unwrap()
 }
 
 /// Tries to send a message, returns an error if it fails.
@@ -58,5 +60,5 @@ pub fn try_send(socket: &mut TcpStream, msg: MsgSend) -> anyhow::Result<MsgRecei
 
     let mut buf = Vec::new();
     socket.read(&mut buf)?;
-    MsgReceive::try_from(buf)
+    MsgReceive::try_from(&buf)
 }

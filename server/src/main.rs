@@ -1,74 +1,69 @@
 use tokio::io::{split, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 mod protocol;
-use anyhow::Result;
 use protocol::{MsgReceive, MsgSend};
+mod board;
+use board::BoardInstance;
 
-enum Cell {
-    // Represents a cell opened by the client
-    REVEALED(u8),
-    // Represents a hidden cell with a flag representing if its occupied by a bomb
-    HIDDEN(bool),
-}
+pub async fn handle(mut socket: TcpStream) {
+    let (reader, mut writer) = split(&mut socket);
+    let mut reader = BufReader::new(reader);
+    let mut buffer = vec![0; 1024];
 
-struct MineSweeperServerConnection {
-    socket: TcpStream,
-    dim: (usize, usize),
-    cells: Vec<Cell>,
-}
+    let mut board_instance: Option<BoardInstance> = None;
 
-impl MineSweeperServerConnection {
-    pub async fn accept(mut socket: TcpStream) -> Result<Self> {
-        let mut buffer = vec![0u8; 1024];
-
-        // Use async read for non-blocking
-        socket.read(&mut buffer).await?;
-
-        // Deserialize the message safely with error handling
-        let msg: MsgReceive = match buffer.try_into() {
-            Ok(m) => m,
-            Err(_) => return Err(anyhow::anyhow!("Failed to parse message")),
+    loop {
+        if reader
+            .read(&mut buffer)
+            .await
+            .expect("Failed to read from socket")
+            == 0
+        {
+            break;
         };
 
-        match msg {
+        let msg = MsgReceive::try_from(&buffer).unwrap();
+        let response = match msg {
             MsgReceive::Error(msg) => panic!("{}", msg),
-            MsgReceive::Reveal(_) => panic!("Should not be receiving this"),
-            MsgReceive::Connect((width, height), _mine_count) => {
-                // Send a connection accepted message
-                let msg: Vec<u8> = MsgSend::ConnectionAccepted.try_into().unwrap();
-                socket.write_all(&msg).await?;
+            MsgReceive::Connect(dim, mine_count) => {
+                if let Some(ref _board) = board_instance {
+                    MsgSend::Error("Client already created a board".to_string())
+                } else {
+                    board_instance = Some(BoardInstance::init(&dim, mine_count));
 
-                // Initialize the connection
-                Ok(Self {
-                    socket,
-                    dim: (width, height),
-                    cells: vec![],
-                })
+                    MsgSend::ConnectionAccepted
+                }
             }
-        }
-    }
-
-    pub async fn handle(&mut self) {
-        let (reader, mut writer) = split(&mut self.socket);
-        let mut reader = BufReader::new(reader);
-        let mut buffer = vec![0; 1024];
-
-        loop {
-            let bytes_read = reader
-                .read(&mut buffer)
-                .await
-                .expect("Failed to read from socket");
-            if bytes_read == 0 {
-                // Connection closed
-                break;
+            MsgReceive::Reveal(index) => {
+                if let Some(ref mut board) = board_instance {
+                    if index < board.cells.len() {
+                        match board.reveal(index) {
+                            Some(revealed_cells) => {
+                                if board.revealed_all() {
+                                    MsgSend::GameWin("10 secs!".to_string(), revealed_cells)
+                                } else {
+                                    MsgSend::RevealCells(revealed_cells)
+                                }
+                            }
+                            None => MsgSend::GameLoss(
+                                "10 secs!".to_string(),
+                                board.get_bomb_positions(),
+                            ),
+                        }
+                    } else {
+                        MsgSend::Error("Client provided index out of bounds".to_string())
+                    }
+                } else {
+                    MsgSend::Error("Client did not initially connect to server".to_string())
+                }
             }
-            
-            // Process the incoming data (placeholder for actual game logic)
-            writer
-                .write_all(b"Message received")
-                .await
-                .expect("Failed to write to socket");
-        }
+        };
+
+        let bytes: Vec<u8> = response.try_into().unwrap();
+        writer
+            .write_all(&bytes)
+            .await
+            .expect("Failed to write to socket");
     }
 }
 
@@ -85,13 +80,8 @@ async fn main() {
             .expect("Failed to accept connection");
 
         tokio::spawn(async move {
-            // Handle the connection asynchronously, using `.await`
-            match MineSweeperServerConnection::accept(socket).await {
-                Ok(mut conn) => {
-                    conn.handle().await;
-                }
-                Err(e) => eprintln!("Connection error: {:?}", e),
-            }
+            println!("Received Conn");
+            handle(socket).await
         });
     }
 }
