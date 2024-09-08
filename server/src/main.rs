@@ -43,7 +43,10 @@ pub async fn handle(mut socket: TcpStream) {
                         if revealed_cells.len() == 0 {
                             running = false;
                             let delta_time = start_time.elapsed();
-                            MsgSend::GameLoss(format!("{:#?}", delta_time), board.get_bomb_positions())
+                            MsgSend::GameLoss(
+                                format!("{:#?}", delta_time),
+                                board.get_bomb_positions(),
+                            )
                         } else {
                             if board.revealed_all() {
                                 running = false;
