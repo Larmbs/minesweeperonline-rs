@@ -62,8 +62,9 @@ impl MineSweeperClient {
                         assert!(index < self.cells.len(), "Server supplied fatal indices");
                         self.cells[index] = Cell::Revealed(value);
                     }
-                }
-                MsgReceive::GameEnd(_, _, _) => todo!(),
+                },
+                MsgReceive::GameWin(_, _) => todo!(),
+                MsgReceive::GameLoss(_, mines) => println!("{:?}", mines),
             }
         }
     }

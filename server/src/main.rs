@@ -37,18 +37,18 @@ pub async fn handle(mut socket: TcpStream) {
             MsgReceive::Reveal(index) => {
                 if let Some(ref mut board) = board_instance {
                     if index < board.cells.len() {
-                        match board.reveal(index) {
-                            Some(revealed_cells) => {
-                                if board.revealed_all() {
-                                    MsgSend::GameWin("10 secs!".to_string(), revealed_cells)
-                                } else {
-                                    MsgSend::RevealCells(revealed_cells)
-                                }
-                            }
-                            None => MsgSend::GameLoss(
+                        let revealed_cells = board.reveal(index);
+                        if revealed_cells.len() == 0 {
+                            MsgSend::GameLoss(
                                 "10 secs!".to_string(),
                                 board.get_bomb_positions(),
-                            ),
+                            )
+                        } else {
+                            if board.revealed_all() {
+                                MsgSend::GameWin("10 secs!".to_string(), revealed_cells)
+                            } else {
+                                MsgSend::RevealCells(revealed_cells)
+                            }
                         }
                     } else {
                         MsgSend::Error("Client provided index out of bounds".to_string())

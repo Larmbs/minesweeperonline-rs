@@ -30,8 +30,10 @@ pub enum MsgReceive {
     ConnectionAccepted,
     // ([index, value])
     RevealCells(Vec<(usize, u8)>),
-    // (win/loss, time, [index])
-    GameEnd(bool, String, Vec<usize>),
+    // (time, [index, value])
+    GameWin(String, Vec<(usize, u8)>),
+    // (time, [index])
+    GameLoss(String, Vec<usize>),
 }
 impl TryFrom<Vec<u8>> for MsgReceive {
     type Error = anyhow::Error;
