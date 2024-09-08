@@ -1,9 +1,12 @@
+//! Defines the protocol used between server and client
+
 use anyhow::Context;
 use bincode;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
+/// Message that client sends to server
 #[derive(Serialize, PartialEq)]
 pub enum MsgSend {
     // (message)
@@ -21,6 +24,7 @@ impl TryInto<Vec<u8>> for MsgSend {
     }
 }
 
+/// Message sent by server and received by client
 #[derive(Deserialize, PartialEq)]
 pub enum MsgReceive {
     // (message)

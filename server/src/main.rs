@@ -11,8 +11,8 @@ pub async fn handle(mut socket: TcpStream) {
     let mut buffer = vec![0; 1024];
 
     let mut board_instance: Option<BoardInstance> = None;
-
-    loop {
+    let mut running = true;
+    while running {
         if reader
             .read(&mut buffer)
             .await
@@ -39,9 +39,11 @@ pub async fn handle(mut socket: TcpStream) {
                     if index < board.cells.len() {
                         let revealed_cells = board.reveal(index);
                         if revealed_cells.len() == 0 {
+                            running = false;
                             MsgSend::GameLoss("10 secs!".to_string(), board.get_bomb_positions())
                         } else {
                             if board.revealed_all() {
+                                running = false;
                                 MsgSend::GameWin("10 secs!".to_string(), revealed_cells)
                             } else {
                                 MsgSend::RevealCells(revealed_cells)
@@ -78,8 +80,9 @@ async fn main() {
             .expect("Failed to accept connection");
 
         tokio::spawn(async move {
-            println!("Received Conn");
-            handle(socket).await
+            println!("Received Connection");
+            handle(socket).await;
+            println!("Connection complete")
         });
     }
 }

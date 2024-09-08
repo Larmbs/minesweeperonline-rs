@@ -1,8 +1,8 @@
+//! Defines a client which can interact with MineSweeper server
 mod protocol;
 
 use anyhow::Result;
 use protocol::{try_send, MsgReceive, MsgSend};
-use std::fmt::Debug;
 use std::net::{TcpStream, ToSocketAddrs};
 
 /// Represents an individual MineSweeper cell's state
@@ -11,31 +11,8 @@ enum Cell {
     Revealed(u8),
     Hidden(bool),
 }
-impl Debug for Cell {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Cell::Revealed(val) =>
-                    if *val == 0 {
-                        " ".to_string()
-                    } else {
-                        format!("{}", val)
-                    },
-                Cell::Hidden(flagged) =>
-                    if *flagged {
-                        "f".to_string()
-                    } else {
-                        "+".to_string()
-                    },
-            }
-        )
-    }
-}
 
 /// A MineSweeper client to interact with server online
-#[derive(Debug)]
 pub struct MineSweeperClient {
     socket: TcpStream,
     dim: (usize, usize),
