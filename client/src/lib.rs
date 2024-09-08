@@ -12,11 +12,20 @@ enum Cell {
     Hidden(bool),
 }
 
+/// Represents the games current state
+#[derive(PartialEq)]
+enum State {
+    Playing,
+    Lost,
+    Won,
+}
+
 /// A MineSweeper client to interact with server online
 pub struct MineSweeperClient {
     socket: TcpStream,
     dim: (usize, usize),
     cells: Vec<Cell>,
+    state: State,
 }
 impl MineSweeperClient {
     /// Starts a game by connecting to server
@@ -34,6 +43,7 @@ impl MineSweeperClient {
                 socket,
                 dim,
                 cells: vec![Cell::Hidden(false); dim.0 * dim.1],
+                state: State::Playing,
             })
         } else {
             panic!("Should never happen")
@@ -57,16 +67,20 @@ impl MineSweeperClient {
         if self.cells[index] == Cell::Hidden(false) {
             let reply = try_send(&mut self.socket, MsgSend::Reveal(index)).unwrap();
             match reply {
-                MsgReceive::Error(msg) => panic!("{}", msg),
+                MsgReceive::Error(msg) => println!("{}", msg),
                 MsgReceive::ConnectionAccepted => panic!("Should never happen"),
                 MsgReceive::RevealCells(cells) => {
                     self.reveal_cells(cells);
                 }
                 MsgReceive::GameWin(time, cells) => {
                     self.reveal_cells(cells);
+                    self.state = State::Won;
                     println!("Time:{}", time);
                 }
-                MsgReceive::GameLoss(time, mines) => println!("Time:{} Mines:{:?}", time, mines),
+                MsgReceive::GameLoss(time, mines) => {
+                    self.state = State::Lost;
+                    println!("Time:{} Mines:{:?}", time, mines)
+                }
             }
         }
     }
@@ -88,5 +102,43 @@ impl MineSweeperClient {
     pub fn ix(&self, i: usize, j: usize) -> usize {
         assert!(i < self.dim.0 && j < self.dim.1, "Index out of bounds");
         i + j * self.dim.0
+    }
+
+    pub fn is_won(&self) -> bool {
+        self.state == State::Won
+    }
+
+    pub fn is_lost(&self) -> bool {
+        self.state == State::Lost
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.state == State::Playing
+    }
+
+    pub fn print_board(&self) {
+        let (width, height) = self.dim;
+        for y in 0..height {
+            for x in 0..width {
+                let index = self.ix(x, y);
+                match self.cells[index] {
+                    Cell::Revealed(proximity) => {
+                        if proximity == u8::MAX {
+                            print!(" * "); // Mine
+                        } else {
+                            print!(" {} ", proximity); // Number of adjacent mines
+                        }
+                    }
+                    Cell::Hidden(flagged) => {
+                        if flagged {
+                            print!(" F "); // Flagged cell
+                        } else {
+                            print!(" . "); // Hidden cell
+                        }
+                    }
+                }
+            }
+            println!(); // New line after each row
+        }
     }
 }

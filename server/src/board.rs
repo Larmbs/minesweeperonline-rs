@@ -77,19 +77,29 @@ impl BoardInstance {
             }
             self.cells[index].hidden = false;
             self.revealed_count += 1;
-            let (x, y) = self.coord_from_index(index);
+
+            if self.cells[index].proximity == 0 {
+                let (x, y) = self.coord_from_index(index);
             let indices = [
                 self.ix(x.saturating_sub(1), y),
                 self.ix(x + 1, y),
                 self.ix(x, y + 1),
                 self.ix(x, y.saturating_sub(1)),
+                self.ix(x.saturating_sub(1), y.saturating_sub(1)),
+                self.ix(x + 1, y + 1),
+                self.ix(x.saturating_sub(1), y + 1),
+                self.ix(x + 1, y.saturating_sub(1)),
             ];
-            let mut res = self.reveal(indices[0]);
-            res.extend(self.reveal(indices[1]));
-            res.extend(self.reveal(indices[2]));
-            res.extend(self.reveal(indices[3]));
+            let mut res = Vec::new();
+            for i in indices {
+                res.extend(self.reveal(i));
+            }
             res.push((index, self.cells[index].proximity));
             res
+            } else {
+                vec![(index, self.cells[index].proximity)]
+            }
+            
         } else {
             vec![]
         }

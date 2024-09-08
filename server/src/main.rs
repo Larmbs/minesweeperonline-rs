@@ -4,12 +4,14 @@ mod protocol;
 use protocol::{MsgReceive, MsgSend};
 mod board;
 use board::BoardInstance;
+use chrono;
 
 pub async fn handle(mut socket: TcpStream) {
     let (reader, mut writer) = split(&mut socket);
     let mut reader = BufReader::new(reader);
     let mut buffer = vec![0; 1024];
 
+    let start_time = chrono::Utc::now();
     let mut board_instance: Option<BoardInstance> = None;
     let mut running = true;
     while running {
@@ -40,11 +42,13 @@ pub async fn handle(mut socket: TcpStream) {
                         let revealed_cells = board.reveal(index);
                         if revealed_cells.len() == 0 {
                             running = false;
-                            MsgSend::GameLoss("10 secs!".to_string(), board.get_bomb_positions())
+                            let delta_time = chrono::Utc::now() - start_time;
+                            MsgSend::GameLoss(delta_time.to_string(), board.get_bomb_positions())
                         } else {
                             if board.revealed_all() {
                                 running = false;
-                                MsgSend::GameWin("10 secs!".to_string(), revealed_cells)
+                                let delta_time = chrono::Utc::now() - start_time;
+                                MsgSend::GameWin(delta_time.to_string(), revealed_cells)
                             } else {
                                 MsgSend::RevealCells(revealed_cells)
                             }
