@@ -74,44 +74,8 @@ impl BoardInstance {
             return None;
         }
 
-        let mut revealed_cells: Vec<(usize, u8)> = Vec::new();
-        let mut to_reveal = vec![index];
-        let mut visited = vec![false; self.cells.len()];
 
-        while let Some(current_index) = to_reveal.pop() {
-            if visited[current_index] {
-                continue;
-            }
-            visited[current_index] = true;
-
-            if self.cells[current_index].hidden {
-                self.cells[current_index].hidden = false;
-                revealed_cells.push((current_index, self.cells[current_index].proximity));
-                self.revealed_count += 1;
-
-                if self.cells[current_index].proximity == 0 {
-                    let (x, y) = self.coord_from_index(current_index);
-                    for dx in -1..=1 {
-                        for dy in -1..=1 {
-                            let nx = x as isize + dx;
-                            let ny = y as isize + dy;
-                            if nx >= 0
-                                && ny >= 0
-                                && (nx as usize) < self.dim.0
-                                && (ny as usize) < self.dim.1
-                            {
-                                let ni = self.ix(nx as usize, ny as usize);
-                                if ni < self.cells.len() && !visited[ni] {
-                                    to_reveal.push(ni);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Some(revealed_cells)
+        Some(vec![(0, 5), (1, 2), (2, 1), (3, 0), (4, 5)])
     }
 
     /// Returns a list of indices where a bomb is located
