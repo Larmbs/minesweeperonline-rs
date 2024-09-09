@@ -10,14 +10,15 @@ use std::net::{TcpStream, ToSocketAddrs};
 pub enum Cell {
     Revealed(u8),
     Hidden(bool),
+    Mine,
 }
 
 /// Represents the games current state
 #[derive(PartialEq)]
-enum State {
+pub enum State {
     Playing,
-    Lost,
-    Won,
+    Lost(String),
+    Won(String),
 }
 
 /// A MineSweeper client to interact with server online
@@ -25,7 +26,7 @@ pub struct MineSweeperClient {
     socket: TcpStream,
     dim: (usize, usize),
     cells: Vec<Cell>,
-    state: State,
+    pub state: State,
 }
 impl MineSweeperClient {
     /// Starts a game by connecting to server
@@ -74,12 +75,10 @@ impl MineSweeperClient {
                 }
                 MsgReceive::GameWin(time, cells) => {
                     self.reveal_cells(cells);
-                    self.state = State::Won;
-                    println!("Time:{}", time);
+                    self.state = State::Won(format!("Time:{}", time));
                 }
-                MsgReceive::GameLoss(time, mines) => {
-                    self.state = State::Lost;
-                    println!("Time:{} Mines:{:?}", time, mines)
+                MsgReceive::GameLoss(time, _mines) => {
+                    self.state = State::Lost(format!("Time:{}", time));
                 }
             }
         }
@@ -102,44 +101,6 @@ impl MineSweeperClient {
     pub fn ix(&self, i: usize, j: usize) -> usize {
         assert!(i < self.dim.0 && j < self.dim.1, "Index out of bounds");
         i + j * self.dim.0
-    }
-
-    pub fn is_won(&self) -> bool {
-        self.state == State::Won
-    }
-
-    pub fn is_lost(&self) -> bool {
-        self.state == State::Lost
-    }
-
-    pub fn is_playing(&self) -> bool {
-        self.state == State::Playing
-    }
-
-    pub fn print_board(&self) {
-        let (width, height) = self.dim;
-        for y in 0..height {
-            for x in 0..width {
-                let index = self.ix(x, y);
-                match self.cells[index] {
-                    Cell::Revealed(proximity) => {
-                        if proximity == u8::MAX {
-                            print!(" * "); // Mine
-                        } else {
-                            print!(" {} ", proximity); // Number of adjacent mines
-                        }
-                    }
-                    Cell::Hidden(flagged) => {
-                        if flagged {
-                            print!(" F "); // Flagged cell
-                        } else {
-                            print!(" . "); // Hidden cell
-                        }
-                    }
-                }
-            }
-            println!(); // New line after each row
-        }
     }
 
     pub fn get_cell(&self, index: usize) -> &Cell {

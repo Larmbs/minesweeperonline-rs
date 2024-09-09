@@ -1,25 +1,22 @@
 use client;
 use iced::alignment::{Horizontal, Vertical};
-use iced::mouse;
-use iced::widget::{button, column, mouse_area, row, text, Column, Row};
-use iced::{event, executor, Application, Command, Element, Settings};
+use iced::widget::{button, column, container, mouse_area, row, text, Column, Row};
+use iced::{executor, Application, Command, Element, Settings};
 
+#[derive(Debug)]
 enum Status {
     Connecting,
+    FailedToConnect,
     Playing,
     Lost,
     Won,
 }
-#[derive(PartialEq)]
-enum Click {
-    Right,
-    Left,
-}
+
 struct MinesweeperGUI {
     client: Option<client::MineSweeperClient>,
     status: Status,
     dim: (usize, usize),
-    last_click: Click,
+    speed: String,
 }
 
 #[derive(Debug, Clone)]
@@ -42,7 +39,7 @@ impl Application for MinesweeperGUI {
                 client: None,
                 status: Status::Connecting,
                 dim: (10, 10),
-                last_click: Click::Left,
+                speed: String::new(),
             },
             Command::perform(async {}, |_| Message::Connect),
         )
@@ -56,15 +53,12 @@ impl Application for MinesweeperGUI {
         match message {
             Message::RevealCell(index) => {
                 if let Some(ref mut client) = self.client {
-                    if client.is_playing() {
-                        client.reveal_cell(index);
+                    client.reveal_cell(index);
 
-                        if client.is_won() {
-                            self.status = Status::Won
-                        }
-                        if client.is_lost() {
-                            self.status = Status::Lost
-                        };
+                    match &client.state {
+                        client::State::Playing => (),
+                        client::State::Lost(time) => {self.status = Status::Lost; self.speed = time.to_string()},
+                        client::State::Won(time) => {self.status = Status::Won; self.speed = time.to_string()},
                     }
                 }
             }
@@ -78,17 +72,19 @@ impl Application for MinesweeperGUI {
                 return Command::perform(async {}, |_| Message::Connect);
             }
             Message::Connect => {
-                self.client = Some(
-                    client::MineSweeperClient::start_game("127.0.0.1:8000", self.dim, 10)
-                        .expect("Unable to connect to server"),
-                );
+                self.status = Status::Playing;
+
+                match client::MineSweeperClient::start_game("127.0.0.1:8000", self.dim, 10) {
+                    Ok(client) => self.client = Some(client),
+                    Err(_) => self.status = Status::FailedToConnect,
+                }
             }
         }
         Command::none()
     }
 
     fn view(&self) -> Element<Message> {
-        let top_bar = row![button("NewGame").on_press(Message::NewGame)];
+        let top_bar = row![button("NewGame").on_press(Message::NewGame), text(format!("Status: {:?}", self.status)), text(format!("Time: {}", self.speed))];
         let (width, height) = self.dim;
         let mut row = Row::new();
         let nums = [" ", "1", "2", "3", "4", "5", "6", "7", "8"];
@@ -104,9 +100,13 @@ impl Application for MinesweeperGUI {
                             if *state {
                                 "F"
                             } else {
-                                "M"
+                                "[]"
                             }
+                        },
+                        client::Cell::Mine => {
+                            "X"
                         }
+
                     };
                 }
                 column = column.push(
@@ -123,7 +123,7 @@ impl Application for MinesweeperGUI {
             }
             row = row.push(column);
         }
-        column!(top_bar, row,).into()
+        container(column!(top_bar, row)).align_y(Vertical::Center).align_x(Horizontal::Center).into()
     }
 
     fn theme(&self) -> Self::Theme {
