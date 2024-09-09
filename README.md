@@ -22,17 +22,18 @@ opcode
 ## Protocol V2
 This is the updated protocol with more checks and more efficient data flow
 
+max_bytes = 10001
+
 ### Client
 opcode
 - [0] Error
     size: (u16)
     name: (error_code)
 
-- [1] Connect
-    size: (u8, u8, u16)
-    name: (width, height, mine_count)
-    If width or height exceed 100 then throws an error.
-    If mine_count exceeds 100*100 - 1 then throws an error.
+- [1] SetVersion
+    size: (u16)
+    name: (version)
+    If version is invalid then it throws an error.
 
 - [2] NewGame
     size: (u8, u8, u16)
@@ -43,24 +44,32 @@ opcode
 - [3] Reveal
     size: (u16)
     name: (index)
+    If index is out of range then throws an error.
 
 - [4] GetTime
     size: ()
     name: ()
 
+- [5] CloseGame
+    size: ()
+    name: ()
+    
 ### Server
+
 opcode
 - [0] Error
     size: (u16)
     name: (error_code)
 
-- [1] Connection Accepted
+- [1] Accepted
     size: ()
     name: ()
 
-- [2] Reveal Cells 
+- [2] RevealCells 
     size: ([u8; u16])
-    name: ([val; width*height])
+    name: ([val; width*height]) 
+    0..=8 number
+    9 ignore
 
 - [3] GameWin 
     size: ([u8; u16])
@@ -73,3 +82,13 @@ opcode
 - [5] Time
     size: (String)
     name: (time)
+
+### Error Codes
+Senders Fault: 0..=99
+- [0] Unrecoverable Error
+
+Recipients Fault: 100..=199
+- [100] Unrecoverable Error
+
+Ok: 200..=299
+- [200] Success

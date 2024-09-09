@@ -1,10 +1,14 @@
 //! Defines a client which can interact with MineSweeper server
 mod protocol;
+mod protocol_v2;
 mod zip;
 
 use anyhow::Result;
-use protocol::{try_send, MsgReceive, MsgSend};
-use std::net::{TcpStream, ToSocketAddrs};
+use protocol_v2::{Bytes, ClientMsg, ServerMsg, MAX_BYTES};
+use std::{
+    io::{Read, Write},
+    net::{TcpStream, ToSocketAddrs},
+};
 
 /// Represents an individual MineSweeper cell's state
 #[derive(Clone, PartialEq)]
@@ -12,88 +16,48 @@ pub enum Cell {
     Revealed(u8),
     Hidden(bool),
     Mine,
+    MineExploded,
 }
 
 /// Represents the games current state
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum State {
     Playing,
-    Lost(String),
-    Won(String),
+    Idle,
+    Lost,
+    Won,
 }
-
-/// A MineSweeper client to interact with server online
-pub struct MineSweeperClient {
-    socket: TcpStream,
-    dim: (usize, usize),
-    cells: Vec<Cell>,
-    pub state: State,
-}
-impl MineSweeperClient {
-    /// Starts a game by connecting to server
-    pub fn start_game<A: ToSocketAddrs>(
-        server_addr: A,
-        dim: (usize, usize),
-        mine_count: usize,
-    ) -> Result<Self> {
-        let mut socket = TcpStream::connect(server_addr)?;
-
-        let reply = try_send(&mut socket, MsgSend::Connect(dim, mine_count)).unwrap();
-
-        if reply == MsgReceive::ConnectionAccepted {
-            Ok(Self {
-                socket,
-                dim,
-                cells: vec![Cell::Hidden(false); dim.0 * dim.1],
-                state: State::Playing,
-            })
-        } else {
-            panic!("Should never happen")
+impl State {
+    pub fn should_display(&self) -> bool {
+        match self {
+            State::Playing | State::Lost | State::Won => {
+                true
+            },
+            _ => false,
         }
     }
-    fn reveal_cells(&mut self, cells: Vec<(usize, u8)>) {
-        for (index, value) in cells {
-            if index >= self.cells.len() {
-                let _ = try_send(
-                    &mut self.socket,
-                    MsgSend::Error("Server supplied indices out of bounds".to_string()),
-                );
-            };
-            self.cells[index] = Cell::Revealed(value);
+}
+#[derive(Clone)]
+pub struct Board {
+    pub dim: (usize, usize),
+    pub cells: Vec<Cell>,
+}
+impl Board {
+    pub fn new(dim: (usize, usize)) -> Board {
+        Board {
+            dim,
+            cells: vec![Cell::Hidden(false); dim.0 * dim.1],
         }
     }
-
-    /// Reveals a cell
-    pub fn reveal_cell(&mut self, index: usize) {
-        assert!(index < self.cells.len(), "Index provided is out of range");
-        if self.state == State::Playing {
-            if self.cells[index] == Cell::Hidden(false) {
-                let reply = match try_send(&mut self.socket, MsgSend::Reveal(index)) {
-                    Ok(reply) => reply,
-                    Err(err) => {println!("{}", err); return ();},
-                };
-                match reply {
-                    MsgReceive::Error(msg) => println!("{}", msg),
-                    MsgReceive::ConnectionAccepted => panic!("Should never happen"),
-                    MsgReceive::RevealCells(cells) => {
-                        self.reveal_cells(cells);
-                    }
-                    MsgReceive::GameWin(time, cells) => {
-                        self.reveal_cells(cells);
-                        self.state = State::Won(time);
-                        for i in 0..self.cells.len() {
-                            if let Cell::Hidden(_) = self.cells[i] {
-                                self.cells[i] = Cell::Mine;
-                            }
-                        }
-                    }
-                    MsgReceive::GameLoss(time, mines) => {
-                        self.state = State::Lost(time);
-                        for mine in mines {
-                            self.cells[mine] = Cell::Mine;
-                        }
-                    }
-                }
+    pub fn reveal_cells(&mut self, cells: &Vec<u8>) {
+        assert!(
+            cells.len() == self.cells.len(),
+            "Too many cells were provided"
+        );
+        for (i, v) in cells.iter().enumerate() {
+            match v {
+                0..=8 => self.cells[i] = Cell::Revealed(*v),
+                _ => (),
             }
         }
     }
@@ -106,18 +70,116 @@ impl MineSweeperClient {
         }
     }
 
-    /// Returns the boards cell dimensions
-    pub fn get_dim(&self) -> &(usize, usize) {
-        &self.dim
+    /// Reveals all hidden cells as mines
+    pub fn reveal_all_as_mines(&mut self) {
+        for i in 0..self.cells.len() {
+            if let Cell::Hidden(_) = self.cells[i] {
+                self.cells[i] = Cell::Mine;
+            }
+        }
     }
 
-    /// Given a coord it returns the corresponding cell index
-    pub fn ix(&self, i: usize, j: usize) -> usize {
-        assert!(i < self.dim.0 && j < self.dim.1, "Index out of bounds");
-        i + j * self.dim.0
+    /// Show Mines
+    pub fn show_mines(&mut self, mines: &Vec<u16>) {
+        for i in mines {
+            self.cells[*i as usize] = Cell::MineExploded;
+        }
+    }
+}
+
+/// A MineSweeper client to interact with server online
+pub struct MineSweeperClient {
+    socket: TcpStream,
+    error_code: u16,
+    pub state: State,
+    pub board: Option<Board>,
+}
+impl MineSweeperClient {
+    /// Starts a game by connecting to server
+    pub fn connect<A: ToSocketAddrs>(server_addr: A) -> Result<Self> {
+        let mut socket = TcpStream::connect(server_addr)?;
+
+        let reply = Self::send_message(&mut socket, ClientMsg::SetVersion(2))
+            .expect("Failed opening message");
+
+        if reply == ServerMsg::Accepted() {
+            Ok(Self {
+                socket,
+                error_code: 200,
+                state: State::Idle,
+                board: None,
+            })
+        } else {
+            panic!("Should never happen")
+        }
+    }
+    pub fn new_game(&mut self, dim: (usize, usize), mine_count: usize) {
+        let reply = Self::send_message(
+            &mut self.socket,
+            ClientMsg::NewGame(dim.0 as u8, dim.1 as u8, mine_count as u16),
+        )
+        .expect("Failed opening message");
+
+        if reply == ServerMsg::Accepted() {
+            self.board = Some(Board::new(dim));
+            self.state = State::Playing;
+        }
     }
 
-    pub fn get_cell(&self, index: usize) -> &Cell {
-        &self.cells[index]
+    pub fn close_game(&mut self) {
+        let reply = Self::send_message(&mut self.socket, ClientMsg::CloseGame()).unwrap();
+
+        if reply == ServerMsg::Accepted() {
+            self.board = None;
+            self.state = State::Idle;
+        }
+    }
+
+    fn send_message(socket: &mut TcpStream, message: ClientMsg) -> Result<ServerMsg> {
+        let bytes = message.to_bytes()?;
+        socket.write_all(&bytes)?;
+
+        let mut buffer: Bytes = vec![0; MAX_BYTES];
+        socket.read(&mut buffer)?;
+        let reply = ServerMsg::from_bytes(&buffer)?;
+        Ok(reply)
+    }
+
+    /// Reveals a cell
+    pub fn reveal_cell(&mut self, index: usize) {
+        if let Some(ref mut board) = self.board {
+            if self.state == State::Playing {
+                let reply = Self::send_message(&mut self.socket, ClientMsg::Reveal(index as u16))
+                    .expect("Failed to send message");
+
+                match reply {
+                    ServerMsg::Error(code) => {
+                        self.error_code = code;
+                    },
+                    ServerMsg::RevealCells(cells) => {
+                        board.reveal_cells(&cells);
+                    },
+                    ServerMsg::GameWin(cells) => {
+                        board.reveal_cells(&cells);
+                        board.reveal_all_as_mines();
+                        self.state = State::Won;
+                    },
+                    ServerMsg::GameLoss(mines) => {
+                        board.show_mines(&mines);
+                        self.state = State::Lost;
+                    },
+                    _ => panic!("Invalid response received"),
+                }
+            }
+        }
+    }
+
+    /// Flags a cell for convenience
+    pub fn flag_cell(&mut self, index: usize) {
+        if self.state == State::Playing {
+            if let Some(ref mut board) = self.board {
+                board.flag_cell(index);
+            }
+        }
     }
 }

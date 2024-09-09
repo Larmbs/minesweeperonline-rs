@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Defines the protocol used between server and client
 
 use anyhow::Context;

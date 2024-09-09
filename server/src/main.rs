@@ -1,72 +1,99 @@
 use tokio::io::{split, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-mod protocol;
-use protocol::{MsgReceive, MsgSend};
 mod board;
+mod protocol_v2;
+use protocol_v2::{ClientMsg, ServerMsg};
 mod zip;
 use board::BoardInstance;
-use std::time::Instant;
+
+/// Represents the games current state
+#[derive(PartialEq)]
+pub enum State {
+    Playing,
+    Idle,
+    Lost,
+    Won,
+}
+struct ClientHandler {
+    pub version: u16,
+    pub board: Option<BoardInstance>,
+    pub state: State,
+}
+impl ClientHandler {
+    pub fn new() -> Self {
+        ClientHandler {
+            version: 0,
+            board: None,
+            state: State::Idle,
+        }
+    }
+    pub fn set_version(&mut self, version: u16) -> ServerMsg {
+        self.version = version;
+        self.board = None;
+        self.state = State::Idle;
+        ServerMsg::Accepted()
+    }
+    pub fn reveal(&mut self, index: usize) -> ServerMsg {
+        if let Some(ref mut board) = self.board {
+            let revealed = board.reveal_cells(index);
+            if revealed.len() == 0 {
+                ServerMsg::GameLoss(board.get_bomb_positions())
+            } else if board.revealed_all() {
+                ServerMsg::GameWin(revealed)
+            } else {
+                ServerMsg::RevealCells(revealed)
+            }
+        } else {
+            ServerMsg::Error(100)
+        }
+    }
+    pub fn new_game(&mut self, width: usize, height: usize, mine_count: usize) -> ServerMsg {
+        self.board = Some(BoardInstance::init(&(width, height), mine_count));
+        self.state = State::Playing;
+        ServerMsg::Accepted()
+    }
+    pub fn close_game(&mut self) -> ServerMsg {
+        self.state = State::Idle;
+        self.board = None;
+        ServerMsg::Accepted()
+    }
+}
 
 pub async fn handle(mut socket: TcpStream) {
     let (reader, mut writer) = split(&mut socket);
     let mut reader = BufReader::new(reader);
     let mut buffer = vec![0; 2048];
-    let start_time = Instant::now();
-    let mut board_instance: Option<BoardInstance> = None;
-    let mut running = true;
-    while running {
+
+    let mut client_handler = ClientHandler::new();
+    loop {
         match reader.read(&mut buffer).await {
             Ok(size) => {
                 if size == 0 {
                     break;
                 }
-                let msg = MsgReceive::try_from(&zip::decode(&buffer)).unwrap();
-        let response = match msg {
-            MsgReceive::Error(msg) => panic!("An error occurred {}", msg),
-            MsgReceive::Connect(dim, mine_count) => {
-                if let Some(ref _board) = board_instance {
-                    MsgSend::Error("Client already created a board".to_string())
-                } else {
-                    board_instance = Some(BoardInstance::init(&dim, mine_count));
-
-                    MsgSend::ConnectionAccepted
-                }
-            }
-            MsgReceive::Reveal(index) => {
-                if let Some(ref mut board) = board_instance {
-                    if index < board.cells.len() {
-                        let revealed_cells = board.reveal(index);
-                        if revealed_cells.len() == 0 {
-                            running = false;
-                            let delta_time = start_time.elapsed();
-                            MsgSend::GameLoss(
-                                format!("{:#?}", delta_time),
-                                board.get_bomb_positions(),
-                            )
-                        } else {
-                            if board.revealed_all() {
-                                running = false;
-                                let delta_time = start_time.elapsed();
-                                MsgSend::GameWin(format!("{:#?}", delta_time), revealed_cells)
-                            } else {
-                                MsgSend::RevealCells(revealed_cells)
-                            }
-                        }
-                    } else {
-                        MsgSend::Error("Client provided index out of bounds".to_string())
+                let msg = ClientMsg::from_bytes(&buffer).expect("");
+                let response: ServerMsg = match msg {
+                    ClientMsg::Error(code) => panic!("Error Code Received: {}", code),
+                    ClientMsg::SetVersion(version) => {
+                        client_handler.set_version(version)
+                    },
+                    ClientMsg::Reveal(index) => {
+                        client_handler.reveal(index as usize)
                     }
-                } else {
-                    MsgSend::Error("Client did not initially connect to server".to_string())
-                }
-            }
-        };
+                    ClientMsg::NewGame(width, height, mine_count) => {
+                        client_handler.new_game(width as usize, height as usize, mine_count as usize)
+                    },
+                    ClientMsg::GetTime() => ServerMsg::Accepted(),
+                    ClientMsg::CloseGame() => {
+                        client_handler.close_game()
+                    },
+                };
 
-        let mut bytes: Vec<u8> = response.try_into().unwrap();
-        bytes.push(0);
-        writer
-            .write_all(&zip::encode(&bytes))
-            .await
-            .expect("Failed to write to socket");
+                let bytes = response.to_bytes().unwrap();
+                writer
+                    .write_all(&bytes)
+                    .await
+                    .expect("Failed to write to socket");
             }
             Err(err) => match err.kind() {
                 std::io::ErrorKind::NotFound

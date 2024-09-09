@@ -67,6 +67,19 @@ impl BoardInstance {
         }
     }
 
+    pub fn reveal_cells(&mut self, index: usize) -> Vec<u8> {
+        let mut res = vec![9u8; self.cells.len()];
+
+        let revealed = self.reveal(index);
+        if revealed.len() == 0 {
+            return vec![];
+        }
+        for (i, v) in revealed {
+            res[i] = v;
+        }
+        res
+        
+    }
     /// Reveals cells and returns what has been revealed
     pub fn reveal(&mut self, index: usize) -> Vec<(usize, u8)> {
         let mut result = vec![];
@@ -118,12 +131,12 @@ impl BoardInstance {
     }
 
     /// Returns a list of indices where a bomb is located
-    pub fn get_bomb_positions(&self) -> Vec<usize> {
+    pub fn get_bomb_positions(&self) -> Vec<u16> {
         self.cells
             .iter()
             .enumerate()
             .filter(|(_, cell)| cell.proximity == u8::MAX)
-            .map(|(i, _)| i)
+            .map(|(i, _)| i as u16)
             .collect()
     }
 
