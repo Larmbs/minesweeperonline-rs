@@ -1,3 +1,5 @@
+use std::vec;
+
 use rand::seq::SliceRandom;
 
 #[derive(Clone, Debug)]
@@ -67,41 +69,52 @@ impl BoardInstance {
 
     /// Reveals cells and returns what has been revealed
     pub fn reveal(&mut self, index: usize) -> Vec<(usize, u8)> {
-        if index >= self.cells.len() {
+        let mut result = vec![];
+
+        // Ensure the index is valid and the cell is hidden
+        if index >= self.cells.len() || !self.cells[index].hidden {
+            return result;
+        }
+
+        if self.cells[index].proximity == u8::MAX {
             return vec![];
         }
 
-        if self.cells[index].hidden {
-            if self.cells[index].proximity == u8::MAX {
-                return vec![];
-            }
-            self.cells[index].hidden = false;
-            self.revealed_count += 1;
+        // Reveal the current cell
+        self.cells[index].hidden = false;
+        result.push((index, self.cells[index].proximity));
+        self.revealed_count += 1;
 
-            if self.cells[index].proximity == 0 {
-                let (x, y) = self.coord_from_index(index);
-                let indices = [
-                    self.ix(x.saturating_sub(1), y),
-                    self.ix(x + 1, y),
-                    self.ix(x, y + 1),
-                    self.ix(x, y.saturating_sub(1)),
-                    self.ix(x.saturating_sub(1), y.saturating_sub(1)),
-                    self.ix(x + 1, y + 1),
-                    self.ix(x.saturating_sub(1), y + 1),
-                    self.ix(x + 1, y.saturating_sub(1)),
-                ];
-                let mut res = Vec::new();
-                for i in indices {
-                    res.extend(self.reveal(i));
-                }
-                res.push((index, self.cells[index].proximity));
-                res
-            } else {
-                vec![(index, self.cells[index].proximity)]
-            }
-        } else {
-            vec![]
+        // If it's not a proximity of 0, stop recursion here
+        if self.cells[index].proximity > 0 {
+            return result;
         }
+
+        // For cells with proximity 0, recursively reveal neighbors
+        let (x, y) = self.coord_from_index(index);
+        let neighbors = [
+            (x.saturating_sub(1), y),                   // Left
+            (x + 1, y),                                 // Right
+            (x, y.saturating_sub(1)),                   // Up
+            (x, y + 1),                                 // Down
+            (x.saturating_sub(1), y.saturating_sub(1)), // Upper-left
+            (x + 1, y + 1),                             // Lower-right
+            (x.saturating_sub(1), y + 1),               // Lower-left
+            (x + 1, y.saturating_sub(1)),               // Upper-right
+        ];
+
+        for (nx, ny) in neighbors.iter() {
+            if *nx < self.dim.0 && *ny < self.dim.1 {
+                let neighbor_index = self.ix(*nx, *ny);
+
+                // Only reveal if it's hidden, to prevent revisiting revealed cells
+                if self.cells[neighbor_index].hidden {
+                    result.extend(self.reveal(neighbor_index));
+                }
+            }
+        }
+
+        result
     }
 
     /// Returns a list of indices where a bomb is located

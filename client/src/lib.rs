@@ -7,7 +7,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 
 /// Represents an individual MineSweeper cell's state
 #[derive(Clone, PartialEq)]
-enum Cell {
+pub enum Cell {
     Revealed(u8),
     Hidden(bool),
 }
@@ -140,5 +140,9 @@ impl MineSweeperClient {
             }
             println!(); // New line after each row
         }
+    }
+
+    pub fn get_cell(&self, index: usize) -> &Cell {
+        &self.cells[index]
     }
 }
