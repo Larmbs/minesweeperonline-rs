@@ -80,7 +80,7 @@ impl MineSweeperClient {
                     }
                     MsgReceive::GameWin(time, cells) => {
                         self.reveal_cells(cells);
-                        self.state = State::Won(format!("Time:{}", time));
+                        self.state = State::Won(time);
                         for i in 0..self.cells.len() {
                             if let Cell::Hidden(_) = self.cells[i] {
                                 self.cells[i] = Cell::Mine;
@@ -88,7 +88,7 @@ impl MineSweeperClient {
                         }
                     }
                     MsgReceive::GameLoss(time, mines) => {
-                        self.state = State::Lost(format!("Time:{}", time));
+                        self.state = State::Lost(time);
                         for mine in mines {
                             self.cells[mine] = Cell::Mine;
                         }
