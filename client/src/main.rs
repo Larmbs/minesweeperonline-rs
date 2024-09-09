@@ -1,8 +1,25 @@
 use client;
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, column, container, mouse_area, row, text, Column, Row};
+
+use iced::widget::{
+    button, column, container, image, mouse_area, row, text, Column, Image, Row,
+};
 use iced::{executor, Application, Command, Element, Settings};
 
+const Images: [&str; 12] = [
+    "client/images/0.png",
+    "client/images/1.png",
+    "client/images/2.png",
+    "client/images/3.png",
+    "client/images/4.png",
+    "client/images/5.png",
+    "client/images/6.png",
+    "client/images/7.png",
+    "client/images/8.png",
+    "client/images/mine.png",
+    "client/images/mask.png",
+    "client/images/flag.png",
+];
 #[derive(Debug)]
 enum Status {
     Connecting,
@@ -98,35 +115,28 @@ impl Application for MinesweeperGUI {
         .padding(15);
         let (width, height) = self.dim;
         let mut row = Row::new();
-        let nums = [" ", "1", "2", "3", "4", "5", "6", "7", "8"];
         for x in 0..width {
             let mut column = Column::new();
             for y in 0..height {
-                let mut txt = " ";
+                let mut path_img = Images[10];
                 if let Some(ref client) = self.client {
                     let cell = client.get_cell(x + y * width);
-                    txt = match cell {
-                        client::Cell::Revealed(val) => nums[*val as usize],
+                    path_img = match cell {
+                        client::Cell::Revealed(val) => Images[*val as usize],
                         client::Cell::Hidden(state) => {
                             if *state {
-                                "F"
+                                Images[11]
                             } else {
-                                "[]"
+                                Images[10]
                             }
                         }
-                        client::Cell::Mine => "X",
+                        client::Cell::Mine => Images[9],
                     };
                 }
                 column = column.push(
-                    mouse_area(
-                        text(txt)
-                            .vertical_alignment(Vertical::Center)
-                            .horizontal_alignment(Horizontal::Center)
-                            .width(50)
-                            .height(50),
-                    )
-                    .on_right_press(Message::FlagCell(x + y * width))
-                    .on_press(Message::RevealCell(x + y * width)),
+                    mouse_area(Image::<image::Handle>::new(path_img).width(50).height(50))
+                        .on_right_press(Message::FlagCell(x + y * width))
+                        .on_press(Message::RevealCell(x + y * width)),
                 );
             }
             row = row.push(column);
@@ -134,6 +144,8 @@ impl Application for MinesweeperGUI {
         container(column!(top_bar, row))
             .align_y(Vertical::Center)
             .align_x(Horizontal::Center)
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill)
             .into()
     }
 

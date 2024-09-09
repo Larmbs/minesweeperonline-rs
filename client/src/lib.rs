@@ -65,20 +65,30 @@ impl MineSweeperClient {
     /// Reveals a cell
     pub fn reveal_cell(&mut self, index: usize) {
         assert!(index < self.cells.len(), "Index provided is out of range");
-        if self.cells[index] == Cell::Hidden(false) {
-            let reply = try_send(&mut self.socket, MsgSend::Reveal(index)).unwrap();
-            match reply {
-                MsgReceive::Error(msg) => println!("{}", msg),
-                MsgReceive::ConnectionAccepted => panic!("Should never happen"),
-                MsgReceive::RevealCells(cells) => {
-                    self.reveal_cells(cells);
-                }
-                MsgReceive::GameWin(time, cells) => {
-                    self.reveal_cells(cells);
-                    self.state = State::Won(format!("Time:{}", time));
-                }
-                MsgReceive::GameLoss(time, _mines) => {
-                    self.state = State::Lost(format!("Time:{}", time));
+        if self.state == State::Playing {
+            if self.cells[index] == Cell::Hidden(false) {
+                let reply = try_send(&mut self.socket, MsgSend::Reveal(index)).unwrap();
+                match reply {
+                    MsgReceive::Error(msg) => println!("{}", msg),
+                    MsgReceive::ConnectionAccepted => panic!("Should never happen"),
+                    MsgReceive::RevealCells(cells) => {
+                        self.reveal_cells(cells);
+                    }
+                    MsgReceive::GameWin(time, cells) => {
+                        self.reveal_cells(cells);
+                        self.state = State::Won(format!("Time:{}", time));
+                        for i in 0..self.cells.len() {
+                            if let Cell::Hidden(_) = self.cells[i] {
+                                self.cells[i] = Cell::Mine;
+                            }
+                        }
+                    }
+                    MsgReceive::GameLoss(time, mines) => {
+                        self.state = State::Lost(format!("Time:{}", time));
+                        for mine in mines {
+                            self.cells[mine] = Cell::Mine;
+                        }
+                    }
                 }
             }
         }

@@ -7,5 +7,5 @@ edition = "2021"
 anyhow = "1.0.87"
 bincode = "1.3.3"
 constrained-inputs = "0.1.2"
-iced = {version="0.12.1", features=["advanced"]}
+iced = {version="0.12.0", features=["image"]}
 serde = {version="1.0.210", features = ["derive"]}
