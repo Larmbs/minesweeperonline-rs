@@ -57,8 +57,14 @@ impl Application for MinesweeperGUI {
 
                     match &client.state {
                         client::State::Playing => (),
-                        client::State::Lost(time) => {self.status = Status::Lost; self.speed = time.to_string()},
-                        client::State::Won(time) => {self.status = Status::Won; self.speed = time.to_string()},
+                        client::State::Lost(time) => {
+                            self.status = Status::Lost;
+                            self.speed = time.to_string()
+                        }
+                        client::State::Won(time) => {
+                            self.status = Status::Won;
+                            self.speed = time.to_string()
+                        }
                     }
                 }
             }
@@ -84,7 +90,12 @@ impl Application for MinesweeperGUI {
     }
 
     fn view(&self) -> Element<Message> {
-        let top_bar = row![button("NewGame").on_press(Message::NewGame), text(format!("Status: {:?}", self.status)), text(format!("Time: {}", self.speed))];
+        let top_bar = row![
+            button("NewGame").on_press(Message::NewGame),
+            text(format!("Status: {:?}", self.status)),
+            text(format!("Time: {}", self.speed))
+        ]
+        .padding(15);
         let (width, height) = self.dim;
         let mut row = Row::new();
         let nums = [" ", "1", "2", "3", "4", "5", "6", "7", "8"];
@@ -102,11 +113,8 @@ impl Application for MinesweeperGUI {
                             } else {
                                 "[]"
                             }
-                        },
-                        client::Cell::Mine => {
-                            "X"
                         }
-
+                        client::Cell::Mine => "X",
                     };
                 }
                 column = column.push(
@@ -123,7 +131,10 @@ impl Application for MinesweeperGUI {
             }
             row = row.push(column);
         }
-        container(column!(top_bar, row)).align_y(Vertical::Center).align_x(Horizontal::Center).into()
+        container(column!(top_bar, row))
+            .align_y(Vertical::Center)
+            .align_x(Horizontal::Center)
+            .into()
     }
 
     fn theme(&self) -> Self::Theme {
