@@ -2,11 +2,11 @@ use client;
 use iced::alignment::{Horizontal, Vertical};
 
 use iced::widget::{
-    button, column, container, image, mouse_area, row, text, Column, Image, Row,
+    button, column, container, image, mouse_area, row, text, text_input, Column, Image, Row,
 };
-use iced::{executor, Application, Command, Element, Settings};
+use iced::{executor, Application, Command, Element, Length, Settings};
 
-const Images: [&str; 12] = [
+const IMAGES: [&str; 12] = [
     "client/images/0.png",
     "client/images/1.png",
     "client/images/2.png",
@@ -27,6 +27,7 @@ enum Status {
     Playing,
     Lost,
     Won,
+    Idle,
 }
 
 struct MinesweeperGUI {
@@ -42,6 +43,9 @@ enum Message {
     FlagCell(usize),
     NewGame,
     Connect,
+    SetWidth(Option<usize>),
+    SetHeight(Option<usize>),
+    GoIdle,
 }
 
 impl Application for MinesweeperGUI {
@@ -102,55 +106,89 @@ impl Application for MinesweeperGUI {
                     Err(_) => self.status = Status::FailedToConnect,
                 }
             }
+            Message::SetWidth(w) => {
+                if w.is_some() {
+                    self.dim.0 = w.unwrap().clamp(0, 50);
+                    return Command::perform(async {}, |_| Message::GoIdle);
+                }
+            }
+            Message::SetHeight(h) => {
+                if h.is_some() {
+                    self.dim.1 = h.unwrap().clamp(0, 50);
+                    return Command::perform(async {}, |_| Message::GoIdle);
+                }
+            }
+            Message::GoIdle => {
+                self.status = Status::Idle;
+                self.client = None;
+            }
         }
         Command::none()
     }
 
     fn view(&self) -> Element<Message> {
         let top_bar = row![
-            button("NewGame").on_press(Message::NewGame),
             text(format!("Status: {:?}", self.status)),
-            text(format!("Time: {}", self.speed))
+            text(format!("Time: {}", self.speed)),
+        ];
+        let bottom_bar = row![
+            text_input("8", &self.dim.0.to_string())
+                .on_input(|v| { Message::SetWidth(v.parse().ok()) })
+                .width(100),
+            text_input("8", &self.dim.1.to_string())
+                .on_input(|v| { Message::SetHeight(v.parse().ok()) })
+                .width(100),
+            button("NewGame").on_press(Message::NewGame),
         ]
         .padding(15);
         let (width, height) = self.dim;
         let mut row = Row::new();
+
+        let max_width = 600u16;
+        let max_height = 400u16;
+        let dx = max_width / width as u16;
+        let dy = max_height / height as u16;
+        let b_size = dx.min(dy);
         for x in 0..width {
             let mut column = Column::new();
             for y in 0..height {
-                let mut path_img = Images[10];
+                let mut path_img = IMAGES[10];
                 if let Some(ref client) = self.client {
                     let cell = client.get_cell(x + y * width);
                     path_img = match cell {
-                        client::Cell::Revealed(val) => Images[*val as usize],
+                        client::Cell::Revealed(val) => IMAGES[*val as usize],
                         client::Cell::Hidden(state) => {
                             if *state {
-                                Images[11]
+                                IMAGES[11]
                             } else {
-                                Images[10]
+                                IMAGES[10]
                             }
                         }
-                        client::Cell::Mine => Images[9],
+                        client::Cell::Mine => IMAGES[9],
                     };
                 }
                 column = column.push(
-                    mouse_area(Image::<image::Handle>::new(path_img).width(50).height(50))
-                        .on_right_press(Message::FlagCell(x + y * width))
-                        .on_press(Message::RevealCell(x + y * width)),
+                    mouse_area(
+                        Image::<image::Handle>::new(path_img)
+                            .width(b_size)
+                            .height(b_size),
+                    )
+                    .on_right_press(Message::FlagCell(x + y * width))
+                    .on_press(Message::RevealCell(x + y * width)),
                 );
             }
             row = row.push(column);
         }
-        container(column!(top_bar, row))
+        container(column!(top_bar, row, bottom_bar))
             .align_y(Vertical::Center)
             .align_x(Horizontal::Center)
-            .width(iced::Length::Fill)
-            .height(iced::Length::Fill)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .into()
     }
 
     fn theme(&self) -> Self::Theme {
-        Self::Theme::Dracula
+        Self::Theme::Light
     }
 }
 

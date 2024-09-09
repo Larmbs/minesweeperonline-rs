@@ -377,6 +377,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "constrained-inputs",
+ "flate2",
  "iced",
  "serde",
 ]
@@ -2386,6 +2387,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "flate2",
  "rand",
  "serde",
  "tokio",

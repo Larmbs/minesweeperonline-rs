@@ -5,6 +5,7 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use crate::zip;
 
 /// Message that client sends to server
 #[derive(Serialize, PartialEq)]
@@ -49,9 +50,9 @@ impl TryFrom<Vec<u8>> for MsgReceive {
 /// Tries to send a message, returns an error if it fails.
 pub fn try_send(socket: &mut TcpStream, msg: MsgSend) -> anyhow::Result<MsgReceive> {
     let bytes: Vec<u8> = msg.try_into()?;
-    socket.write_all(&bytes)?;
+    socket.write_all(&zip::encode(&bytes))?;
 
-    let mut buffer = vec![0u8; 1024];
+    let mut buffer = vec![0u8; 2048];
     socket.read(&mut buffer)?;
-    MsgReceive::try_from(buffer)
+    MsgReceive::try_from(zip::decode(&buffer))
 }

@@ -3,30 +3,26 @@ use tokio::net::{TcpListener, TcpStream};
 mod protocol;
 use protocol::{MsgReceive, MsgSend};
 mod board;
+mod zip;
 use board::BoardInstance;
 use std::time::Instant;
 
 pub async fn handle(mut socket: TcpStream) {
     let (reader, mut writer) = split(&mut socket);
     let mut reader = BufReader::new(reader);
-    let mut buffer = vec![0; 1024];
-
+    let mut buffer = vec![0; 2048];
     let start_time = Instant::now();
     let mut board_instance: Option<BoardInstance> = None;
     let mut running = true;
     while running {
-        if reader
-            .read(&mut buffer)
-            .await
-            .expect("Failed to read from socket")
-            == 0
-        {
-            break;
-        };
-
-        let msg = MsgReceive::try_from(&buffer).unwrap();
+        match reader.read(&mut buffer).await {
+            Ok(size) => {
+                if size == 0 {
+                    break;
+                }
+                let msg = MsgReceive::try_from(&zip::decode(&buffer)).unwrap();
         let response = match msg {
-            MsgReceive::Error(msg) => panic!("{}", msg),
+            MsgReceive::Error(msg) => panic!("An error occurred {}", msg),
             MsgReceive::Connect(dim, mine_count) => {
                 if let Some(ref _board) = board_instance {
                     MsgSend::Error("Client already created a board".to_string())
@@ -67,9 +63,24 @@ pub async fn handle(mut socket: TcpStream) {
 
         let bytes: Vec<u8> = response.try_into().unwrap();
         writer
-            .write_all(&bytes)
+            .write_all(&zip::encode(&bytes))
             .await
             .expect("Failed to write to socket");
+            }
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound
+                | std::io::ErrorKind::PermissionDenied
+                | std::io::ErrorKind::ConnectionRefused
+                | std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::NotConnected
+                | std::io::ErrorKind::AddrNotAvailable
+                | std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::AlreadyExists
+                | std::io::ErrorKind::TimedOut => panic!("{:?}", err.kind()),
+                _ => continue,
+            },
+        }
     }
 }
 

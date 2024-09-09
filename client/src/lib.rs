@@ -1,5 +1,6 @@
 //! Defines a client which can interact with MineSweeper server
 mod protocol;
+mod zip;
 
 use anyhow::Result;
 use protocol::{try_send, MsgReceive, MsgSend};
@@ -67,7 +68,10 @@ impl MineSweeperClient {
         assert!(index < self.cells.len(), "Index provided is out of range");
         if self.state == State::Playing {
             if self.cells[index] == Cell::Hidden(false) {
-                let reply = try_send(&mut self.socket, MsgSend::Reveal(index)).unwrap();
+                let reply = match try_send(&mut self.socket, MsgSend::Reveal(index)) {
+                    Ok(reply) => reply,
+                    Err(err) => {println!("{}", err); return ();},
+                };
                 match reply {
                     MsgReceive::Error(msg) => println!("{}", msg),
                     MsgReceive::ConnectionAccepted => panic!("Should never happen"),
