@@ -52,7 +52,7 @@ pub fn try_send(socket: &mut TcpStream, msg: MsgSend) -> anyhow::Result<MsgRecei
     let bytes: Vec<u8> = msg.try_into()?;
     socket.write_all(&zip::encode(&bytes))?;
 
-    let mut buffer = vec![0u8; 3048];
+    let mut buffer = vec![0u8; 4000];
     socket.read(&mut buffer)?;
     MsgReceive::try_from(zip::decode(&buffer))
 }

@@ -61,7 +61,8 @@ pub async fn handle(mut socket: TcpStream) {
             }
         };
 
-        let bytes: Vec<u8> = response.try_into().unwrap();
+        let mut bytes: Vec<u8> = response.try_into().unwrap();
+        bytes.push(0);
         writer
             .write_all(&zip::encode(&bytes))
             .await
