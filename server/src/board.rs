@@ -71,7 +71,7 @@ impl BoardInstance {
         let mut res = vec![9u8; self.cells.len()];
 
         let revealed = self.reveal(index);
-        if revealed.len() == 0 {
+        if revealed.len() == 0 && self.cells[index].hidden {
             return vec![];
         }
         for (i, v) in revealed {
