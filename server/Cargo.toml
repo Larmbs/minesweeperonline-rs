@@ -10,3 +10,4 @@ flate2 = "1.0.33"
 rand = "0.8.5"
 serde = {version="1.0.210", features = ["derive"]}
 tokio = { version = "1.4", features = ["full"] }
+easy-sockets = "0.1.0"

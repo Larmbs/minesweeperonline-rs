@@ -9,6 +9,60 @@ use std::{
     io::{Read, Write},
     net::{TcpStream, ToSocketAddrs},
 };
+use easy_sockets::prelude::*;
+
+mod message {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    pub enum Client {
+        // size: (u16)
+        // name: (error_code)
+        Error(u16),
+        // size: (u16)
+        // name: (version)
+        // If version is invalid then it throws an error.
+        SetVersion(u16),
+        // size: (u8, u8, u16)
+        // name: (width, height, mine_count)
+        // If width or height exceed 100 then throws an error.
+        // If mine_count exceeds 100*100 - 1 then throws an error.
+        NewGame(u8, u8, u16),
+        // size: (u16)
+        // name: (index)
+        // If index is out of range then throws an error.
+        Reveal(u16),
+        // size: ()
+        // name: ()
+        GetTime(),
+        // size: ()
+        // name: ()
+        CloseGame(),
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub enum Server {
+        // size: (u16)
+        // name: (error_code)
+        Error(u16),
+        // size: ()
+        // name: ()
+        Accepted(),
+        // size: ([u8; u16])
+        // name: ([val; width*height])
+        RevealCells(Vec<u8>),
+        // size: ([u8; u16])
+        // name: ([val; width*height])
+        GameWin(Vec<u8>),
+        // size: (Vec<u16>)
+        // name: (Vec<index>)
+        GameLoss(Vec<u16>),
+        // size: (String)
+        // name: (time)
+        Time(String),
+    }
+}
+
 
 /// Represents an individual MineSweeper cell's state
 #[derive(Clone, PartialEq)]
@@ -22,6 +76,7 @@ pub enum Cell {
 /// Represents the games current state
 #[derive(PartialEq, Debug)]
 pub enum State {
+    Connecting,
     Playing,
     Idle,
     Lost,
@@ -93,6 +148,30 @@ pub struct MineSweeperClient {
     error_code: u16,
     pub state: State,
     pub board: Option<Board>,
+}
+impl tcp::ClientTCP for MineSweeperClient {
+    type ClientMsg = message::Client;
+
+    type ServerMsg = message::Server;
+
+    fn handle_response(&mut self, response: Self::ServerMsg) {
+        match response {
+            message::Server::Error(_) => todo!(),
+            message::Server::Accepted() => todo!(),
+            message::Server::RevealCells(vec) => todo!(),
+            message::Server::GameWin(vec) => todo!(),
+            message::Server::GameLoss(vec) => todo!(),
+            message::Server::Time(_) => todo!(),
+        }
+    }
+
+    fn update(&mut self) -> Option<()> {
+        if self.state == State::Connecting {
+            self.send_message(message::Client::SetVersion(2)).expect("Error connecting to server")
+        }
+
+        Some(())
+    }
 }
 impl MineSweeperClient {
     /// Starts a game by connecting to server

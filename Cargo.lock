@@ -377,6 +377,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "constrained-inputs",
+ "easy-sockets",
  "flate2",
  "iced",
  "serde",
@@ -712,6 +713,19 @@ checksum = "fd39dde40b6e196c2e8763f23d119ddb1a8714534bf7d77fa97a65b0feda3986"
 dependencies = [
  "libc",
  "linux-raw-sys 0.6.5",
+]
+
+[[package]]
+name = "easy-sockets"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b3d48edf217a9dce80c59b1de6a7935ccb089c4317a975abaaca06f28948289"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "lazy_static",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -1619,6 +1633,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "constrained-inputs",
+ "easy-sockets",
 ]
 
 [[package]]
@@ -2387,6 +2402,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "easy-sockets",
  "flate2",
  "rand",
  "serde",
@@ -3292,7 +3308,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

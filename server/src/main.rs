@@ -1,10 +1,59 @@
-use tokio::io::{split, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{TcpListener, TcpStream};
 mod board;
-mod protocol_v2;
-use protocol_v2::{ClientMsg, ServerMsg};
-mod zip;
 use board::BoardInstance;
+
+use easy_sockets::{start_server, ServerConn};
+
+mod message {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    pub enum Client {
+        // size: (u16)
+        // name: (error_code)
+        Error(u16),
+        // size: (u16)
+        // name: (version)
+        // If version is invalid then it throws an error.
+        SetVersion(u16),
+        // size: (u8, u8, u16)
+        // name: (width, height, mine_count)
+        // If width or height exceed 100 then throws an error.
+        // If mine_count exceeds 100*100 - 1 then throws an error.
+        NewGame(u8, u8, u16),
+        // size: (u16)
+        // name: (index)
+        // If index is out of range then throws an error.
+        Reveal(u16),
+        // size: ()
+        // name: ()
+        GetTime(),
+        // size: ()
+        // name: ()
+        CloseGame(),
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub enum Server {
+        // size: (u16)
+        // name: (error_code)
+        Error(u16),
+        // size: ()
+        // name: ()
+        Accepted(),
+        // size: ([u8; u16])
+        // name: ([val; width*height])
+        RevealCells(Vec<u8>),
+        // size: ([u8; u16])
+        // name: ([val; width*height])
+        GameWin(Vec<u8>),
+        // size: (Vec<u16>)
+        // name: (Vec<index>)
+        GameLoss(Vec<u16>),
+        // size: (String)
+        // name: (time)
+        Time(String),
+    }
+}
 
 /// Represents the games current state
 #[derive(PartialEq)]
@@ -14,121 +63,71 @@ pub enum State {
     Lost,
     Won,
 }
-struct ClientHandler {
+
+struct MineSweeperServerConn {
     pub version: u16,
     pub board: Option<BoardInstance>,
     pub state: State,
 }
-impl ClientHandler {
-    pub fn new() -> Self {
-        ClientHandler {
+impl ServerConn for MineSweeperServerConn {
+    type ClientMsg = message::Client;
+
+    type ServerMsg = message::Server;
+
+    fn handle_message(&mut self, message: Self::ClientMsg) -> Self::ServerMsg {
+        match message {
+            Self::ClientMsg::Error(code) => panic!("Error Code Received: {}", code),
+            Self::ClientMsg::SetVersion(version) => self.set_version(version),
+            Self::ClientMsg::Reveal(index) => self.reveal(index as usize),
+            Self::ClientMsg::NewGame(width, height, mine_count) => {
+                self.new_game(width as usize, height as usize, mine_count as usize)
+            }
+            Self::ClientMsg::GetTime() => Self::ServerMsg::Accepted(),
+            Self::ClientMsg::CloseGame() => self.close_game(),
+        }
+    }
+
+    fn new() -> Self {
+        Self {
             version: 0,
             board: None,
             state: State::Idle,
         }
     }
-    pub fn set_version(&mut self, version: u16) -> ServerMsg {
+}
+
+impl MineSweeperServerConn {
+    pub fn set_version(&mut self, version: u16) -> message::Server {
         self.version = version;
-        self.board = None;
-        self.state = State::Idle;
-        ServerMsg::Accepted()
+        self.close_game()
     }
-    pub fn reveal(&mut self, index: usize) -> ServerMsg {
+    pub fn reveal(&mut self, index: usize) -> message::Server {
         if let Some(ref mut board) = self.board {
             let revealed = board.reveal_cells(index);
             if revealed.len() == 0 {
-                ServerMsg::GameLoss(board.get_bomb_positions())
+                message::Server::GameLoss(board.get_bomb_positions())
             } else if board.revealed_all() {
-                ServerMsg::GameWin(revealed)
+                message::Server::GameWin(revealed)
             } else {
-                ServerMsg::RevealCells(revealed)
+                message::Server::RevealCells(revealed)
             }
         } else {
-            ServerMsg::Error(100)
+            message::Server::Error(100)
         }
     }
-    pub fn new_game(&mut self, width: usize, height: usize, mine_count: usize) -> ServerMsg {
+    pub fn new_game(&mut self, width: usize, height: usize, mine_count: usize) -> message::Server {
         self.board = Some(BoardInstance::init(&(width, height), mine_count));
         self.state = State::Playing;
-        ServerMsg::Accepted()
+        message::Server::Accepted()
     }
-    pub fn close_game(&mut self) -> ServerMsg {
+    pub fn close_game(&mut self) -> message::Server {
         self.state = State::Idle;
         self.board = None;
-        ServerMsg::Accepted()
-    }
-}
-
-pub async fn handle(mut socket: TcpStream) {
-    let (reader, mut writer) = split(&mut socket);
-    let mut reader = BufReader::new(reader);
-    let mut buffer = vec![0; 2048];
-
-    let mut client_handler = ClientHandler::new();
-    loop {
-        match reader.read(&mut buffer).await {
-            Ok(size) => {
-                if size == 0 {
-                    break;
-                }
-                let msg = ClientMsg::from_bytes(&buffer).expect("");
-                let response: ServerMsg = match msg {
-                    ClientMsg::Error(code) => panic!("Error Code Received: {}", code),
-                    ClientMsg::SetVersion(version) => {
-                        client_handler.set_version(version)
-                    },
-                    ClientMsg::Reveal(index) => {
-                        client_handler.reveal(index as usize)
-                    }
-                    ClientMsg::NewGame(width, height, mine_count) => {
-                        client_handler.new_game(width as usize, height as usize, mine_count as usize)
-                    },
-                    ClientMsg::GetTime() => ServerMsg::Accepted(),
-                    ClientMsg::CloseGame() => {
-                        client_handler.close_game()
-                    },
-                };
-
-                let bytes = response.to_bytes().unwrap();
-                writer
-                    .write_all(&bytes)
-                    .await
-                    .expect("Failed to write to socket");
-            }
-            Err(err) => match err.kind() {
-                std::io::ErrorKind::NotFound
-                | std::io::ErrorKind::PermissionDenied
-                | std::io::ErrorKind::ConnectionRefused
-                | std::io::ErrorKind::ConnectionReset
-                | std::io::ErrorKind::ConnectionAborted
-                | std::io::ErrorKind::NotConnected
-                | std::io::ErrorKind::AddrNotAvailable
-                | std::io::ErrorKind::BrokenPipe
-                | std::io::ErrorKind::AlreadyExists
-                | std::io::ErrorKind::TimedOut => panic!("{:?}", err.kind()),
-                _ => continue,
-            },
-        }
+        message::Server::Accepted()
     }
 }
 
 #[tokio::main]
 async fn main() {
-    println!("Starting Server");
-    let listener = TcpListener::bind("127.0.0.1:8000")
-        .await
-        .expect("Error starting the server");
-
-    loop {
-        let (socket, _) = listener
-            .accept()
-            .await
-            .expect("Failed to accept connection");
-
-        tokio::spawn(async move {
-            println!("Received Connection");
-            handle(socket).await;
-            println!("Connection complete")
-        });
-    }
+    start_server::<MineSweeperServerConn>("127.0.0.1:8000").await.expect("Server Closed");
 }

@@ -10,3 +10,4 @@ constrained-inputs = "0.1.2"
 flate2 = "1.0.33"
 iced = {version="0.12.0", features=["image"]}
 serde = {version="1.0.210", features = ["derive"]}
+easy-sockets = "0.1.0"
